@@ -1,0 +1,37 @@
+#cloud-config
+write_files:
+- content: |
+    disable_mlock = true
+
+    hcp_boundary_cluster_id = "${hcp_boundary_cluster_id}"
+
+    listener "tcp" {
+      address = "{{ GetPrivateIP }}:9202"
+      purpose = "proxy"
+    }
+
+    worker {
+      public_addr = "${public_addr}"
+      auth_storage_path = "/opt/boundary"
+      tags = {
+        %{ for k, v in boundary_worker_tags }
+        "${k}" = "${v}"
+      %{ endfor ~}
+      }
+      %{ if controller_generated_activation_token != "" }controller_generated_activation_token = "${controller_generated_activation_token}"%{ endif }
+    }
+  owner: boundary:boundary
+  path: /etc/boundary.d/self-managed-worker.hcl
+  permissions: '0644'
+- content: |
+    [Service]
+    ExecStart=
+    ExecStart=/usr/bin/boundary server -config=/etc/boundary.d/self-managed-worker.hcl
+  owner: boundary:boundary
+  path: /etc/systemd/system/boundary.service.d/override.conf
+  permissions: '0644'
+
+runcmd:
+- [ systemctl, daemon-reload ]
+- [ systemctl, enable, boundary.service ]
+- [ systemctl, start, --no-block, boundary.service ]
